@@ -152,7 +152,7 @@ func main() {
 	}
 
 	// 5. Initialize Gemini Model
-	model, err := gemini.NewModel(ctx, "gemini-2.5-flash", &genai.ClientConfig{
+	model, err := gemini.NewModel(ctx, "gemini-3.6-flash", &genai.ClientConfig{
 		APIKey: geminiAPIKey,
 	})
 	if err != nil {

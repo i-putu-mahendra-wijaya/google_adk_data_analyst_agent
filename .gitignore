@@ -1,2 +1,5 @@
 # Secrets
 .env
+
+# Build artifacts
+/google_adk_data_analyst_agent
