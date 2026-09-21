@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 
 	"cloud.google.com/go/bigquery"
 	"github.com/joho/godotenv"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 	"google.golang.org/genai"
@@ -21,6 +23,7 @@ import (
 	"google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/adk/tool/functiontool"
+	"google.golang.org/adk/tool/mcptoolset"
 )
 
 const (
@@ -116,6 +119,17 @@ func newQueryTool(bqClient *bigquery.Client) (tool.Tool, error) {
 	})
 }
 
+// newEmailToolset builds an ADK toolset backed by the mcp-email-server MCP
+// server (see mcp-email-server/main.go), launched as a subprocess and spoken
+// to over stdio. It exposes the send_email tool to the agent.
+func newEmailToolset() (tool.Toolset, error) {
+	return mcptoolset.New(mcptoolset.Config{
+		Transport: &mcp.CommandTransport{
+			Command: exec.Command("go", "run", "./mcp-email-server"),
+		},
+	})
+}
+
 func main() {
 	// 1. Load .env file
 	if err := godotenv.Load(); err != nil {
@@ -150,6 +164,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create query tool: %v", err)
 	}
+	emailToolset, err := newEmailToolset()
+	if err != nil {
+		log.Fatalf("Failed to create email toolset: %v", err)
+	}
 
 	// 5. Initialize Gemini Model
 	model, err := gemini.NewModel(ctx, "gemini-3.6-flash", &genai.ClientConfig{
@@ -165,7 +183,9 @@ Project: %s, Dataset: %s.
 When a user asks a business or analytical question:
 1. Inspect the relevant table schema using 'get_table_schema' if you need column clarity.
 2. Formulate standard BigQuery SQL queries and run them using 'execute_read_only_query'.
-3. Always interpret the query results to directly answer the user's question with numbers, trends, and clear summaries.`, projectID, DatasetID)
+3. Always interpret the query results to directly answer the user's question with numbers, trends, and clear summaries.
+When the user is satisfied with the analysis and asks you to email or share the findings:
+4. Write a concise plain-text summary of the findings discussed so far, and send it with 'send_email'. If the recipient address or a subject line wasn't given, ask for them before sending.`, projectID, DatasetID)
 
 	analystAgent, err := llmagent.New(llmagent.Config{
 		Name:        "bq_data_analyst",
@@ -173,6 +193,7 @@ When a user asks a business or analytical question:
 		Description: "Data Analyst agent for BigQuery analytics.",
 		Instruction: systemPrompt,
 		Tools:       []tool.Tool{schemaTool, queryTool},
+		Toolsets:    []tool.Toolset{emailToolset},
 	})
 	if err != nil {
 		log.Fatalf("Failed to configure analyst agent: %v", err)
