@@ -1,6 +1,9 @@
 # Secrets
 .env
 
+secrets/*
+!secrets/.gitkeep
+
 # Build artifacts
 /google_adk_data_analyst_agent
 /mcp-email-server/mcp-email-server
